@@ -1,14 +1,21 @@
-library(shiny)
-library(shinydashboard)
+library(semantic.dashboard)
 library(shinyWidgets)
 library(shinythemes)
+library(shiny)
+library(shinyjqui)
+library(highcharter)
+library(plotly)
 library(DT)
+library(shinyjs)
+library(dygraphs)
+library(normtest)
+library(fitdistrplus)
+#install.packages("rsconnect")
+library(rsconnect)
 library(tidyverse)
 library(jsonlite)
 library(httr)
 library(rvest)
-library(plotly)
-library(base)
 
 #Get symbols list for all companies using the Symbols List API
 
@@ -58,109 +65,222 @@ news <- tibble(urls = news_links[1:10], titles = news_titles[1:10])
 news$links <- paste0("<a href='", news$urls, "' target='_blank'>", news$titles, "</a>")    
 
 
-# Define UI for application 
-ui <- fluidPage(theme = shinytheme("flatly"), #Give a theme to the UI
-  
-  useShinydashboard(),
+# Define UI for application that draws a histogram
+ui <- dashboardPage(title = "Stock Time Series",
+                    dashboardHeader(menuItem("GitHub", href = "https://github.com/STA141B-Final-Project/Links-for-the-Project.git")),
+                    dashboardSidebar(title = "Stock Time Series",
+                                     size = "thin", color = "teal", side = "left", visible = F,
+                                     
+                                     sidebarMenu(
+                                       menuItem(tabName = "intro", "Introduction",icon = icon("info")),
+                                       menuItem(tabName = "dash", "Symbols",icon = icon("question")),
+                                       menuItem(tabName = "news", "News",icon = icon("chart line"))
+                                     )
+                    ),
+                    
+                    
+                    
+                    
+                    
+                    dashboardBody(
+                      tabItems(
+                        tabItem(
+                          
+                          ####################################
+                          #####Intro Tab######################
+                          ####################################
+                          
+                          tabName = "intro",
+                          fluidRow(),
+                          
+                          
+                          #first text segment
+                          fluidRow(h2("Why this app exists??")),
+                          
+                          
+                          fluidRow(
+                            tags$div(class="ui blue segment", style="font-size:105%;" ,
+                                     tags$strong("Inspired of the StockStats Web App of Lukas Frei, We would like to establish this app to provide uses information they might interested in........")
+                            )
+                            
+                          ),
+                          
+                          #list of explanatory website links
+                          fluidRow(
+                            withTags(
+                              div(class = "ui relaxed divided list",
+                                  div(class = "item",
+                                      i(class = "chart bar icon",
+                                        style="height: 24px"),
+                                      div(class = "content",
+                                          h1(class = "header", 
+                                             target="_blank",
+                                             style="font-size:110%;" ,
+                                             "Statistical Measures"),
+                                          div(class = "description", style="font-size:100%;" ,
+                                              "Expected Value, Variance, Skewness, Kurtosis")
+                                      )
+                                  ),
+                                  
+                                  
+                                  
+                                  div(class = "item",
+                                      i(class = "chart bar icon"),
+                                      div(class = "content",
+                                          h1(class = "header",
+                                             target="_blank",
+                                             style="font-size:110%;" ,
+                                             "Background"),
+                                          div(class = "description", style="font-size:100%;" ,
+                                              "More info about the company, like news,...")
+                                      )
+                                  )
+                                  
+                              )
+                              
+                            )
+                            
+                            
+                          ),
+                          
+                          fluidRow( h2("Why this application?")),
+                          
+                          #second text segment
+                          fluidRow(
+                            tags$div(class="ui blue segment", style="font-size:105%;" ,
+                                     tags$strong("We are aim to provide user information they are interested in ....")
+                            )
+                          )
+                          
+                        ),
+                        
+                        
+                        
+                        
+                        ####################################
+                        #####Data Tab######################
+                        ####################################
+                        
+                        tabItem(
+                          tabName = "dash",
+                          fluidRow(
+                            withTags(
+                              h1("Interactive Dashboard")
+                            ),
+                            #introduction to symbols
+                            fluidRow(
+                              p("Instructions: First, enter a Stock Symbol (Yahoo Finance data). Then, set a date range (year-month-day) below.
+                       Now, check all boxes of plots and statistics you'd like to see."),
+                              p("Customize your dashboard by adjusting the size of the displayed plots as well as by dragging them around.",
+                                a(href="https://www.marketwatch.com/tools/quotes/lookup.asp", "Stock Symbol Lookup",target="_blank")),
+                              br() )
+                          ),
+                          
+                          # first fluidRow for user to input information
+                          fluidRow(
+                            column(8,
+                                   
+                                   #Allow user to select company stock of choice from dropdown list
+                                   selectInput("symbol", "Choose a company:",
+                                               choices = comp$company,
+                                               selected = "Apple Inc. (AAPL)"
+                                   ),
+                                   
+                                   #User can check whether or not he or she would like to see a second company
+                                   checkboxInput("comp2", "Add a second company for comparison", FALSE),
+                                   
+                                   #Creates option for user to select a second company stock from the same list of companies
+                                   uiOutput("second_select"),
+                                   
+                                   #Input to select which variable the user would like on the Y-axis of the time series plot
+                                   selectInput("yvar1", "Choose graph Y-axis variable:",
+                                               choices = c("Opening Price" = "open",
+                                                           "Daily High Price" = "high",
+                                                           "Daily Low Price" = "low",
+                                                           "Closing Price" = "close",
+                                                           "Percentage Change" = "changePercent")
+                                   ),
+                                   
+                                   #Input date range, starting from the earliest date of data, to today's date as the default date range
+                                   dateRangeInput("dates", 
+                                                  "Select date range:",
+                                                  start = as.Date("2015-03-09", '%Y-%m-%d'), 
+                                                  end = as.Date(as.character(Sys.Date()), '%Y-%m-%d')
+                                   )
+                                   
+                                   
+                            ),
+                            
+                            #Tab for showing the company logos
+                            column(4,
+                                   box(
+                                     title = "Company 1 Logo", status = "info", solidHeader = TRUE,
+                                     background = "light-blue", width = 1, align = 'center',
+                                     uiOutput("img")
+                                   ),
+                                   
+                                   #Keep the second logo hidden unless user adds second company
+                                   conditionalPanel(
+                                     condition = "input.comp2 == true",
+                                     box(
+                                       title = "Company 2 Logo", status = "warning", solidHeader = TRUE,
+                                       width = 1, align = 'center',
+                                       uiOutput("img2")
+                                     )
+                                   )
+                                   
+                            )       
+                          ),
+                          fluidRow( ),
+                          
+                          # second fluidRow for showing the time series plots of stock prices
+                          fluidRow(
+                            column(6, box(title = "Company 1 Plot", width = 6, height = "400px", status = "primary",
+                                          solidHeader = TRUE, 
+                                          plotlyOutput("stock_time", width = "360px", height = "300px")
+                            )
+                            ),
+                            
+                            column(6,
+                                   #Keep second plot hidden unless user adds second company
+                                   conditionalPanel(
+                                     condition = "input.comp2 == true",
+                                     box(title = "Company 2 Plot", width = 6, height = "400px", status = "success",
+                                         solidHeader = TRUE, 
+                                         plotlyOutput("stock_time2", width = "360px", height = "300px")
+                                     )
+                                   )
+                            )
+                            
+                            
+                          )
+                          
+                          
+                          
+                          
+                        ),
+                        
+                        ####################################
+                        ##### News Tab######################
+                        ####################################
+                        
+                        tabItem(
+                          fluidRow(
+                            h1("Top Market Headlines")),
+                          tabName = "news",
+                          
+                          #Tab for news headline links, formatted as one column of a data table
+                          fluidRow(
+                            DT::dataTableOutput("headlines")
+                          )
+                          
+                          
+                        )
+                      ) 
+                    )
+)
 
-  titlePanel("Stock Price Trends"),
-  
-  sidebarLayout(
-    
-    #Create Sidebar where user can input information
-    sidebarPanel( 
-      
-      #Allow user to select company stock of choice from dropdown list
-      selectInput("symbol", "Choose a company:",
-                  choices = comp$company,
-                  selected = "Apple Inc. (AAPL)"
-      ),
-      
-      #User can check whether or not he or she would like to see a second company
-      checkboxInput("comp2", "Add a second company for comparison", FALSE),
-      
-      #Creates option for user to select a second company stock from the same list of companies
-      uiOutput("second_select"),
-      
-      #Input date range, starting from the earliest date of data, to today's date as the default date range
-      dateRangeInput("dates", 
-                     "Select date range:",
-                     start = as.Date("2015-03-09", '%Y-%m-%d'), 
-                     end = as.Date(as.character(Sys.Date()), '%Y-%m-%d')
-      ),
-      
-      #Input to select which variable the user would like on the Y-axis of the time series plot
-      selectInput("yvar1", "Choose graph Y-axis variable:",
-                  choices = c("Opening Price" = "open",
-                              "High Price" = "high",
-                              "Low Price" = "low",
-                              "Closing Price" = "close",
-                              "Percentage Change" = "changePercent")
-      )
-    ),  
-      
-    mainPanel(
-      
-      #Suppress warning messages in shiny webpage
-      tags$style(type="text/css",
-                 ".shiny-output-error { visibility: hidden; }",
-                 ".shiny-output-error:before { visibility: hidden; }"),
-                 
-      tabsetPanel(
-        
-        #Tab for showing the company logos
-        tabPanel(
-          
-          "Selected Companies",
-          
-          box(
-            title = "Company 1 Logo", status = "info", solidHeader = TRUE,
-            width = 5, align = 'center',
-            uiOutput("img")
-          ),
-          
-          #Keep the second logo hidden unless user adds second company
-          conditionalPanel(
-            condition = "input.comp2 == true",
-            box(
-              title = "Company 2 Logo", status = "warning", solidHeader = TRUE,
-              width = 5, align = 'center',
-              uiOutput("img2")
-            )
-          )
-        ),
-        
-        #Tab for showing the time series plots of stock prices
-        tabPanel(
-        
-          "Time Series Plots",
-          
-          box(title = "Company 1 Plot", width = 12, height = "400px", status = "primary",
-              solidHeader = TRUE, 
-              plotlyOutput("stock_time", width = "500px", height = "300px")
-          ),
-          
-          #Keep second plot hidden unless user adds second company
-          conditionalPanel(
-            condition = "input.comp2 == true",
-            box(title = "Company 2 Plot", width = 12, height = "400px", status = "success",
-                solidHeader = TRUE, 
-                plotlyOutput("stock_time2", width = "500px", height = "300px")
-            )
-          )
-        ),
-        
-        #Tab for news headline links, formatted as one column of a data table  
-        tabPanel(
-          
-          "Top Market Headlines",
-          
-          DT::dataTableOutput("headlines")
-        )
-      )  
-    )
-  )
-)    
+   
 
 #Define server for application
 server <- function(input, output) {
